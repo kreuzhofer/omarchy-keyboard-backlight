@@ -14,12 +14,19 @@ if [[ -z $device ]]; then
   exit 1
 fi
 
+lid=open
+for lid_state in /proc/acpi/button/lid/*/state; do
+  if [[ -r $lid_state ]] && grep -q closed "$lid_state"; then
+    lid=closed
+  fi
+done
+
 current=$(brightnessctl -d "$device" get)
 maximum=$(brightnessctl -d "$device" max)
 
 case ${1:-status} in
   status)
-    printf '%s %s %s\n' "$current" "$maximum" "$device"
+    printf '%s %s %s %s\n' "$current" "$maximum" "$lid" "$device"
     ;;
   set)
     case ${2:-} in
