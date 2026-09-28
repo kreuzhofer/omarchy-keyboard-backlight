@@ -17,6 +17,8 @@ BarWidget {
   property bool lidOpen: true
   property int wakeTarget: -1
   property real wakeGuardUntil: 0
+  property real statusStartedAt: 0
+  property real lastActionAt: 0
   readonly property string levelIcon: level <= 0 ? "󰹐" : (level >= maximum ? "󰛨" : "󰌶")
   readonly property bool scheduleEnabled: setting("scheduleEnabled", false) === true
   readonly property int nightStartHour: Number(setting("nightStartHour", 20))
@@ -25,7 +27,9 @@ BarWidget {
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
   function refresh() {
-    if (!statusProc.running) statusProc.running = true
+    if (statusProc.running) return
+    statusStartedAt = Date.now()
+    statusProc.running = true
   }
 
   function setMode(mode) {
@@ -101,7 +105,9 @@ BarWidget {
   function enforceWakeTarget() {
     if (wakeTarget < 0 || sleeping) return
     if (Date.now() > wakeGuardUntil) { wakeTarget = -1; return }
-    if (level !== wakeTarget && !actionProc.running) {
+    // Ignore reads that started before the last set finished; they are stale.
+    if (actionProc.running || statusStartedAt < lastActionAt) return
+    if (level !== wakeTarget) {
       console.log("keyboard-backlight: level " + level + " drifted after wake, re-applying " + wakeTarget)
       setMode(modeForLevel(wakeTarget))
     }
@@ -200,7 +206,7 @@ BarWidget {
   }
   Timer { id: sleepMonitorRestart; interval: 5000; repeat: false; onTriggered: sleepMonitor.running = true }
 
-  Process { id: actionProc; onExited: refreshDelay.start() }
+  Process { id: actionProc; onExited: { root.lastActionAt = Date.now(); refreshDelay.start() } }
   Timer { id: refreshDelay; interval: 150; repeat: false; onTriggered: root.refresh() }
 
   BarIconButton {
